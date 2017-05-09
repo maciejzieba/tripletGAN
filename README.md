@@ -8,10 +8,10 @@ The code is based on *Improved Techniques with GAN* ([arXiv](https://arxiv.org/a
 Please consider citing Training *Triplet Networks with GAN*:
 
 @article{zieba2017training,
-  title={Training Triplet Networks with GAN},
-  author={Zieba, Maciej and Wang, Lei},
-  journal={arXiv preprint arXiv:1704.02227},
-  year={2017}
+    title={Training Triplet Networks with GAN},
+    author={Zieba, Maciej and Wang, Lei},
+    journal={arXiv preprint arXiv:1704.02227},
+    year={2017}
 }
 
 ## Running the code
