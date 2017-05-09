@@ -1,4 +1,4 @@
-# Triplet GAN
+# Triplet GAN 
 [Maciej Zieba](https://www.ii.pwr.edu.pl/~zieba/), [Lei Wang](http://www.uow.edu.au/~leiw/)
 
 This is the official code release for *Training Triplet Networks with GAN* ([arXiv](https://arxiv.org/abs/1704.02227)).
