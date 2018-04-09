@@ -35,7 +35,6 @@ lasagne.random.set_rng(np.random.RandomState(rng.randint(2 ** 15)))
 # load CIFAR-10
 trainx, trainy = cifar10_data.load(args.data_dir, subset='train')
 trainx_unl = trainx.copy()
-trainx_unl2 = trainx.copy()
 nr_batches_train = int(trainx.shape[0]/args.batch_size)
 
 
@@ -95,8 +94,8 @@ def getTriplets(prediction,size):
 a_lab,b_lab,c_lab = getTriplets(output_before_softmax_lab,args.batch_size)
 
 def getLossFuction(a,b,c):
-    n_plus = T.sqrt(T.sum((a - b)**2, axis=1));
-    n_minus = T.sqrt(T.sum((a - c)**2, axis=1));
+    n_plus = T.sqrt(T.sum((a - b)**2, axis=1))
+    n_minus = T.sqrt(T.sum((a - c)**2, axis=1))
     z = T.concatenate([n_minus.dimshuffle(0,'x'),n_plus.dimshuffle(0,'x')],axis=1)
     z = nn.log_sum_exp(z,axis=1)
     return n_plus,n_minus,z
@@ -158,10 +157,15 @@ x_temp = T.tensor4()
 features = ll.get_output(disc_layers[-1], x_temp , deterministic=True)
 generate_features = th.function(inputs=[x_temp ], outputs=features)
 # //////////// perform training //////////////
-for epoch in range(500):
+for epoch in range(200):
     begin = time.time()
     lr = np.cast[th.config.floatX](args.learning_rate * np.minimum(3. - epoch/400., 1.))
-    train_fx = generate_features(txs)
+    nr_batches_lab = int(txs.shape[0]/args.batch_size)
+    train_fx = []
+    for f_id in range(nr_batches_lab):
+        train_fx.append(generate_features(txs[f_id*args.batch_size:(f_id+1)*args.batch_size]))
+    train_fx = np.concatenate(train_fx, axis=0)
+    #train_fx = generate_features(txs)
     ind_global = []
     for k in range(np.shape(train_fx)[0]):
         ftemp = train_fx[k,:]
@@ -173,13 +177,13 @@ for epoch in range(500):
     Pos = []
     Neg = []
     for t in range(trainx_unl.shape[0]/(txs.shape[0])):
-        possible_classes = np.unique(tys);
+        possible_classes = np.unique(tys)
         txs_pos = np.zeros(np.shape(txs)).astype(th.config.floatX)
         txs_neg = np.zeros(np.shape(txs)).astype(th.config.floatX)
         for j in range(0,txs.shape[0]):
             label = tys[j]
-            ind_pos = ind_global[j][tys[ind_global[j]]==label];
-            ind_neg = ind_global[j][tys[ind_global[j]]!=label];
+            ind_pos = ind_global[j][tys[ind_global[j]]==label]
+            ind_neg = ind_global[j][tys[ind_global[j]]!=label]
             txs_pos[j,:] = txs[ind_pos[-1+(-1)*t],:]
             txs_neg[j,:] = txs[ind_neg[t],:]
         inds = rng.permutation(txs.shape[0])
@@ -197,9 +201,8 @@ for epoch in range(500):
     Pos = Pos[inds]
     Neg = Neg[inds]
     trainx_unl = trainx_unl[rng.permutation(trainx_unl.shape[0])]
-    trainx_unl2 = trainx_unl2[rng.permutation(trainx_unl2.shape[0])]
     
-    if epoch==0:
+    if epoch == 0:
         init_param(trainx[:500]) # data based initialization
 
     # train
@@ -208,13 +211,14 @@ for epoch in range(500):
     train_err = 0.
     l_gen = 0.
     for t in range(nr_batches_train):
+        print(t)
         temp = trainx[t*args.batch_size:(t+1)*args.batch_size]
         temp = np.concatenate((temp, Pos[t*args.batch_size:(t+1)*args.batch_size]),axis=0)
         temp = np.concatenate((temp, Neg[t*args.batch_size:(t+1)*args.batch_size]),axis=0)
         llos, lu = train_batch_disc(temp,trainx_unl[t*args.batch_size:(t+1)*args.batch_size],lr)
         loss_lab += llos
         loss_unl += lu
-        lg = train_batch_gen(trainx_unl2[t*args.batch_size:(t+1)*args.batch_size],lr)
+        lg = train_batch_gen(trainx_unl[t*args.batch_size:(t+1)*args.batch_size],lr)
         l_gen += lg
 
     loss_lab /= nr_batches_train
@@ -226,8 +230,8 @@ for epoch in range(500):
     print("Iteration %d, time = %ds, loss_lab = %.4f, loss_unl = %.4f, l_gen = %.4f" % (epoch, time.time()-begin, loss_lab, loss_unl, l_gen))
     sys.stdout.flush()
 
-    np.savez('disc_params_CIFAR.npz', *[p.get_value() for p in disc_params])
-    np.savez('gen_params_CIFAR.npz', *[p.get_value() for p in gen_params])
+np.savez('disc_params_triplet.npz', *lasagne.layers.get_all_param_values(disc_layers))
+np.savez('gen_params_triplet.npz', *lasagne.layers.get_all_param_values(gen_layers))
 
 # final testing
 trainx, trainy = cifar10_data.load(args.data_dir, subset='train')
@@ -238,7 +242,7 @@ x = T.tensor4()
 features = ll.get_output(disc_layers[-1], x, deterministic=True)
 generate_features= th.function(inputs=[x], outputs=features)
 
-batch_size_test = 100;
+batch_size_test = 100
 nr_batches_test = int(testx.shape[0]/batch_size_test)
 for t in range(nr_batches_test):
     if(t==0):
@@ -255,8 +259,8 @@ for t in range(nr_batches_train):
 # calculating distances
 Y = cdist(test_features,train_features)
 ind = np.argsort(Y,axis=1)
-prec = 0.0;
-acc = [0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0];
+prec = 0.0
+acc = [0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]
 # calculating statistics
 for k in range(np.shape(test_features)[0]):
     class_values = trainy[ind[k,:]]
